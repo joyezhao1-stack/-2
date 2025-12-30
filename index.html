@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>超级马力：horse发生</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- 基础样式 --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif; user-select: none; }
+        body { background-color: #5c94fc; overflow: hidden; width: 100vw; height: 100vh; position: relative; margin: 0 auto; touch-action: manipulation; }
+
+        /* 页面通用样式：默认占满竖屏 */
+        .page { 
+            position: absolute; 
+            width: 100%; height: 100%; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; /* 改回居中 */
+            top: 0; left: 0; 
+            background-color: #5c94fc;
+            z-index: 10;
+        }
+        .hidden { display: none !important; }
+
+        /* --- 1. 加载页面 (竖屏) --- */
+        #loading-page { 
+            z-index: 100; 
+            background: url('youxijiazai.gif') no-repeat center center;
+            background-size: cover;
+        }
+        .loading-content { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            width: 100%; 
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.3); /* 半透明遮罩，确保文字可见 */
+        }
+        .loading-character { 
+            width: 250px; /* 原200px的1/3 */
+            height: 250px; /* 原200px的1/3 */
+            position: relative; 
+            margin-bottom: -70px; 
+        }
+        .horse-img { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+            animation: horseDance 0.8s infinite alternate ease-in-out; /* 新增抖动动画 */
+        }
+        .progress-container { width: 60%; height: 20px; background-color: rgba(0,0,0,0.2); border-radius: 10px; border: 2px solid #f8e71c; overflow: hidden; }
+        .progress-bar { height: 100%; width: 0%; background: linear-gradient(to right, #f8e71c, #ff9d00); transition: width 0.3s ease; }
+        .loading-text { color: white; margin-top: 10px; font-size: 14px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+
+        /* --- 2. 主菜单界面 (竖屏) --- */
+        #main-menu-page {
+            background: url('zhucaidannbeijing.gif') no-repeat center center;
+            background-size: cover;
+            justify-content: flex-end; /* 改为底部对齐 */
+            align-items: center;
+            padding-bottom: 100px; /* 增加底部内边距，向下移动按钮 */
+        }
+        .start-btn { 
+            background: url('kaishiyouxi.png') no-repeat center center;
+            background-size: contain; /* 确保图片完整显示 */
+            width: 200px; /* 原来的一半大小 */
+            height: 80px; /* 原来的一半大小 */
+            border: none; 
+            cursor: pointer; 
+            transition: transform 0.1s; 
+            position: relative;
+            z-index: 20;
+            margin: 0; /* 重置margin */
+        }
+        .start-btn:active { 
+            transform: scale(0.95); /* 点击时稍微缩小 */
+        }
+
+        /* --- 3. 游戏进行界面 (强制横屏) --- */
+        #game-play-page {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100vh; 
+            height: 100vw;
+            transform: translate(-50%, -50%) rotate(90deg) scale(1.01); 
+            transform-origin: center center;
+            overflow: hidden;
+            display: none; 
+            background: linear-gradient(to bottom, #5c94fc 0%, #87CEEB 100%);
+            z-index: 50; 
+        }
+
+        .game-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        .ground { 
+            position: absolute; 
+            bottom: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 60px; 
+            background: url('zhuankuai.png') repeat-x; /* 使用砖块图片作为地面 */
+            background-size: auto 100%; /* 保持高度适配 */
+            z-index: 10; 
+        }
+
+        #player {
+            position: absolute; 
+            width: 50px; 
+            height: 60px; 
+            bottom: 60px; 
+            left: 100px; 
+            z-index: 20; 
+            background: url('horse3.png') no-repeat center center; /* 使用主角方块马图片 */
+            background-size: contain; /* 保持图片比例 */
+            border-radius: 10px;
+        }
+        #dizzy-icon { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); font-size: 24px; color: #f8e71c; opacity: 0; transition: opacity 0.2s; }
+        #dizzy-icon.active { opacity: 1; animation: spin 1s infinite linear; }
+
+        #world-mover { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 15; }
+
+        /* 游戏元素样式 */
+        .game-block {
+            position: absolute; 
+            width: 40px; 
+            height: 40px; 
+            background-size: contain; 
+            background-color: #cd6839; 
+            border-radius: 4px; 
+            box-shadow: 2px 2px 0px rgba(0,0,0,0.3); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 20px; 
+            color: white; 
+            font-weight: bold;
+        }
+        .game-block.lucky-block { 
+            background-color: #ff9d00; 
+            border: 2px solid #ffd700; 
+        }
+        .game-block.blank-block { 
+            background-color: #8b4513; 
+            opacity: 0.9; 
+        }
+        .game-coin {
+            position: absolute; 
+            width: 25px; 
+            height: 25px; 
+            background: #f8e71c; 
+            border-radius: 50%; 
+            border: 2px solid #e6b800; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            color: #b8860b; 
+            font-weight: bold; 
+            font-size: 14px; 
+            animation: coinSpin 1s infinite linear;
+        }
+        .game-coin::after { content: "¥"; }
+        .game-enemy {
+            position: absolute; 
+            width: 30px; 
+            height: 30px; 
+            background: url('mogu.png') no-repeat center center; /* 使用蘑菇图片 */
+            background-size: contain; /* 保持图片比例 */
+            border-radius: 50% 50% 5px 5px; 
+            bottom: 60px;
+        }
+        .lucky-item {
+            position: absolute; 
+            top: -40px; 
+            left: 0; 
+            width: 40px; 
+            height: 40px; 
+            border-radius: 5px; 
+            animation: popUp 0.3s ease-out forwards; 
+            z-index: 5;
+            object-fit: contain;
+            background-color: rgba(255, 255, 255, 0.8); /* 临时背景色，方便调试 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+        
+        .ui-layer { position: absolute; top: 20px; left: 20px; z-index: 50; display: flex; gap: 20px; }
+        .score-board { background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px; color: #f8e71c; font-size: 18px; font-weight: bold; border: 2px solid #fff; }
+        
+        #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 90; color: white; text-align: center; cursor: pointer; }
+        .tap-hint { font-size: 24px; animation: pulse 1.5s infinite; }
+
+
+        /* --- 4. 输入昵称界面 (竖屏) --- */
+        #nickname-page { /* ... (样式不变) ... */ }
+        .nickname-box { background-color: #000; border: 8px solid #E53C3C; padding: 20px; width: 80%; max-width: 450px; color: #fff; text-align: center; }
+        .nickname-input-area { background: #fff; padding: 10px; margin-bottom: 20px; border: 2px solid #000; }
+        #nickname-input { width: 100%; border: none; font-size: 20px; text-align: center; outline: none; font-family: monospace; }
+        .avatar-selection { display: flex; justify-content: space-around; margin-top: 15px; }
+        .avatar-option { width: 80px; height: 80px; border: 4px solid transparent; cursor: pointer; transition: border-color 0.2s; background: #fff; padding: 5px; }
+        .avatar-option.selected { border-color: #f8e71c; box-shadow: 0 0 10px #f8e71c; }
+        .get-score-btn { background: #E53C3C; color: #f8e71c; padding: 15px 40px; border-radius: 30px; font-size: 20px; font-weight: bold; border: 4px solid #fff; margin-top: 25px; box-shadow: 0 4px 0 #000; cursor: pointer; }
+
+
+        /* --- 5. 结算与分享界面 (竖屏) --- */
+        #result-page { background: #000; padding: 0; }
+        .result-screen { width: 80%; max-width: 400px; height: 90%; max-height: 700px; background: #fff; border: 8px solid #e53c3c; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 10px; }
+        .result-title-box { position:relative; top:10%; background: #fff; padding: 10px 20px; border: 4px solid #000; text-align: center; }
+        .result-title-box .score-val { font-size: 36px; color: #e53c3c; font-weight: bold; display: inline-block; margin: 5px 0; text-shadow: 1px 1px 0px #f8e71c; }
+        .result-title-box .title-name { font-size: 40px; color: #f8e71c; font-weight: bold; border-bottom: 3px dashed #f8e71c; padding-bottom: 5px; line-height: 1; }
+        
+        /* --- 动画 --- */
+        @keyframes horseDance {
+            0% { 
+                transform: translateY(0) rotate(0deg) scale(1); 
+            }
+            25% { 
+                transform: translateY(-3px) rotate(1deg) scale(1.05); /* 轻微上移并旋转 */
+            }
+            50% { 
+                transform: translateY(0) rotate(-1deg) scale(1); /* 回正并反向旋转 */
+            }
+            75% { 
+                transform: translateY(-3px) rotate(1deg) scale(1.05); /* 再次上移 */
+            }
+            100% { 
+                transform: translateY(0) rotate(0deg) scale(1); /* 回到原始状态 */
+            }
+        }
+        @keyframes runInPlace { 0% { transform: translateY(0); } 50% { transform: translateY(-5px); } 100% { transform: translateY(0); } }
+        @keyframes bounce { 0% { transform: translateY(0); } 100% { transform: translateY(-15px); } }
+        @keyframes coinSpin { 0% { transform: scaleX(1); } 50% { transform: scaleX(0.1); } 100% { transform: scaleX(1); } }
+        @keyframes spin { 0% { transform: translateX(-50%) rotate(0deg); } 100% { transform: translateX(-50%) rotate(360deg); } }
+        @keyframes popUp { 0% { transform: translateY(10px) scale(0); opacity: 0; } 100% { transform: translateY(-30px) scale(1); opacity: 1; } }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        
+        <div id="loading-page" class="page">
+            <div class="loading-content">
+                <div class="loading-character">
+                    <img src="horse.png" alt="小马" class="horse-img" onerror="this.style.display='none'; this.parentNode.style.background='#e53c3c'; this.parentNode.style.borderRadius='50%'">
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <div class="loading-text">资源加载中... <span id="progress-text">0%</span></div>
+            </div>
+        </div>
+
+        <!-- 简化后的主菜单界面，只保留开始游戏按钮 -->
+        <div id="main-menu-page" class="page hidden">
+            <button class="start-btn" onclick="game.showPage('game-play-page')">
+                <!-- 按钮内容现在由背景图片提供 -->
+            </button>
+        </div>
+
+        <div id="game-play-page">
+            <div class="game-layer game-background"></div>
+            
+            <div class="ui-layer">
+                <div class="score-board">金币: <span id="score-display">0</span></div>
+            </div>
+
+            <div id="world-mover">
+                </div>
+
+            <div id="player">
+                <div id="dizzy-icon"><i class="fas fa-dizzy"></i></div>
+            </div>
+
+            <div class="ground" id="ground"></div>
+
+            <div id="start-overlay">
+                <div class="tap-hint"><i class="fas fa-hand-pointer"></i> 点击屏幕跳跃</div>
+                <p style="margin-top:10px;">单次点击跳跃，空中再次点击二段跳</p>
+            </div>
+        </div>
+        
+        <div id="nickname-page" class="page hidden">
+            <div class="nickname-box">
+                <h2>比赛结束!</h2>
+                <p>输入你的名字:</p>
+                <div class="nickname-input-area">
+                    <input type="text" id="nickname-input" placeholder="(输入六个字以内昵称)" maxlength="6">
+                </div>
+
+                <p>选择你的头像</p>
+                <div class="avatar-selection" id="avatar-selection-area">
+                    </div>
+                
+                <button class="get-score-btn" onclick="game.submitNickname()">获取成绩</button>
+            </div>
+        </div>
+
+        <div id="result-page" class="page hidden">
+            <div class="result-screen">
+                <div class="result-header">马年大吉</div>
+                
+                <div class="result-title-box">
+                    <p>在本次游戏中集到</p>
+                    <div class="score-val" id="final-score-display">0 金币</div>
+                    <p>获得称号</p>
+                    <div class="title-name" id="title-name-display">路人小马</div>
+                </div>
+
+                <img src="horse.png" alt="小马马里奥" class="menu-horse" style="width:100px; height:100px; position:absolute; bottom:20%; left:10%;">
+                
+                <div class="result-share-area" style="width:100%; background:none; margin-top:auto;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                        <div style="background:#fff; padding:10px; width:45%; text-align:left; border-radius:5px; border:2px solid #000;">
+                             <p>分享二维码</p>
+                        </div>
+                        <div style="background:#fff; padding:10px; width:45%; text-align:left; border-radius:5px; border=2px solid #000;">
+                            <div class="share-qr-code" style="width:80px; height:80px; background:#ccc;">二维码占位</div>
+                        </div>
+                    </div>
+                </div>
+                <button class="get-score-btn" style="margin-top:10px;" onclick="game.restart()">再玩一次</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        /**
+         * 游戏配置与状态管理
+         */
+        const CONFIG = {
+            gravity: 0.6,
+            jumpStrength: -10,
+            doubleJumpStrength: -8,
+            baseSpeed: 5,     // 基础移动速度
+            slowSpeed: 2.5,   // 眩晕时的速度
+            spawnRate: 60,    // 障碍物生成频率 (帧)
+            groundHeight: 60  // 地面高度
+        };
+
+        const STATE = {
+            isLoading: true,
+            isPlaying: false,
+            isGameOver: false,
+            score: 0,
+            frameCount: 0,
+            speed: CONFIG.baseSpeed,
+            distance: 0,
+            nickname: '',
+            selectedAvatar: 0,
+            titles: [
+                { minScore: 0, name: "路人小马" },
+                { minScore: 50, name: "福气小马" },
+                { minScore: 100, name: "奔腾千里" },
+                { minScore: 200, name: "千金万马" }
+            ],
+            avatars: [
+                'avatar1.png', 
+                'avatar2.png', 
+                'avatar3.png'  
+            ]
+        };
+
+        /**
+         * 游戏引擎核心
+         */
+        const game = {
+            player: null,
+            entities: [], 
+            animationFrameId: null,
+            viewportWidth: 0,
+            viewportHeight: 0,
+            gameWidth: 0,   
+            gameHeight: 0,  
+
+            // 初始化
+            init: function() {
+                this.updateDimensions();
+                this.simulateLoading();
+                this.setupAvatars();
+            },
+            
+            // 更新尺寸 (横屏适配)
+            updateDimensions: function() {
+                this.viewportWidth = window.innerWidth;
+                this.viewportHeight = window.innerHeight;
+                this.gameWidth = this.viewportHeight;
+                this.gameHeight = this.viewportWidth;
+            },
+
+            // 模拟加载进度 (保持不变)
+            simulateLoading: function() {
+                let progress = 0;
+                const bar = document.getElementById('progress-bar');
+                const text = document.getElementById('progress-text');
+                const interval = setInterval(() => {
+                    progress += Math.random() * 5;
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(interval);
+                        setTimeout(() => this.showPage('main-menu-page'), 500);
+                    }
+                    bar.style.width = progress + '%';
+                    text.innerText = Math.floor(progress) + '%';
+                }, 50);
+            },
+            
+            // 统一的页面切换函数
+            showPage: function(pageId) {
+                document.querySelectorAll('.page, #game-play-page').forEach(page => {
+                    page.classList.add('hidden');
+                    page.style.display = 'none';
+                });
+
+                const targetPage = document.getElementById(pageId);
+                targetPage.classList.remove('hidden');
+                
+                if (pageId === 'game-play-page') {
+                    targetPage.style.display = 'block'; 
+                    if (!targetPage._eventBound) {
+                         targetPage.addEventListener('pointerdown', (e) => this.handleInput(e));
+                         document.getElementById('start-overlay').addEventListener('pointerdown', (e) => {
+                            e.stopPropagation(); 
+                            e.preventDefault(); 
+                            document.getElementById('start-overlay').classList.add('hidden');
+                            if (!STATE.isPlaying) this.start();
+                         });
+                        targetPage._eventBound = true;
+                    }
+                    document.getElementById('start-overlay').classList.remove('hidden'); 
+                } else {
+                    targetPage.style.display = 'flex'; // 菜单/结算页使用 flex 居中
+                }
+
+                if (pageId === 'result-page') {
+                    this.updateResultPage();
+                }
+            },
+
+
+            // 游戏开始
+            start: function() {
+                STATE.isPlaying = true;
+                STATE.isGameOver = false;
+                STATE.score = 0;
+                STATE.speed = CONFIG.baseSpeed;
+                STATE.distance = 0;
+                this.entities = [];
+                document.getElementById('world-mover').innerHTML = '';
+                document.getElementById('score-display').innerText = '0';
+                
+                this.player = {
+                    el: document.getElementById('player'),
+                    x: 100, 
+                    y: 0, 
+                    vy: 0, 
+                    width: 50,
+                    height: 60,
+                    canDoubleJump: false,
+                    isDizzy: false
+                };
+                
+                this.player.el.style.bottom = (CONFIG.groundHeight + this.player.y) + 'px';
+
+                this.loop();
+            },
+
+            // 输入处理 (跳跃) - 逻辑保持不变 (只检测触发，依赖 CSS 旋转修复)
+            handleInput: function(e) {
+                if (e.pointerType === 'touch') {
+                    e.preventDefault(); 
+                }
+                
+                if (!STATE.isPlaying) return;
+                
+                if (this.player.y <= 0) {
+                    this.player.vy = CONFIG.jumpStrength;
+                    this.player.canDoubleJump = true;
+                } else if (this.player.canDoubleJump) {
+                    this.player.vy = CONFIG.doubleJumpStrength;
+                    this.player.canDoubleJump = false;
+                }
+            },
+
+            // 游戏主循环
+            loop: function() {
+                if (!STATE.isPlaying || STATE.isGameOver) return;
+
+                this.update();
+                this.render();
+                STATE.frameCount++;
+
+                this.animationFrameId = requestAnimationFrame(() => this.loop());
+            },
+
+            update: function() {
+                // 1. 玩家物理逻辑
+                this.player.vy += CONFIG.gravity;
+                this.player.y -= this.player.vy; 
+                if (this.player.y < 0) {
+                    this.player.y = 0;
+                    this.player.vy = 0;
+                    this.player.canDoubleJump = false;
+                }
+                // 2. 玩家渲染
+                this.player.el.style.bottom = (CONFIG.groundHeight + this.player.y) + 'px';
+                // 3. 生成障碍物
+                this.spawnEntities();
+                // 4. 更新实体位置 & 碰撞检测
+                const screenWidth = this.gameWidth;
+                for (let i = this.entities.length - 1; i >= 0; i--) {
+                    let ent = this.entities[i];
+                    
+                    // 世界向左移动
+                    ent.x -= STATE.speed;
+                    
+                    // 蘑菇兵特殊移动逻辑：小范围来回移动
+                    if (ent.type === 'enemy') {
+                        // 如果还没有设置移动属性，则初始化
+                        if (ent.moveDirection === undefined) {
+                            ent.moveDirection = Math.random() > 0.5 ? 1 : -1; // 随机初始方向
+                            ent.moveSpeed = 0.8 + Math.random() * 0.4; // 随机速度
+                            ent.moveRange = 30 + Math.random() * 20; // 随机移动范围
+                            ent.moveOffset = 0; // 当前位置偏移
+                        }
+                        
+                        // 更新移动偏移
+                        ent.moveOffset += ent.moveDirection * ent.moveSpeed;
+                        
+                        // 如果超出范围，反转方向
+                        if (Math.abs(ent.moveOffset) > ent.moveRange) {
+                            ent.moveDirection *= -1;
+                            // 防止超出范围
+                            ent.moveOffset = ent.moveOffset > 0 ? ent.moveRange : -ent.moveRange;
+                        }
+                        
+                        // 应用移动偏移
+                        ent.visualX = ent.x + ent.moveOffset;
+                    } else {
+                        ent.visualX = ent.x;
+                    }
+                    
+                    if (ent.x < -100) {
+                        if (ent.el && ent.el.parentNode) ent.el.parentNode.removeChild(ent.el);
+                        this.entities.splice(i, 1);
+                        continue;
+                    }
+                    ent.el.style.left = ent.visualX + 'px';
+                    if (!ent.collected && this.checkCollision(this.player, ent)) {
+                        this.handleCollision(ent);
+                    }
+                }
+            },
+
+            render: function() { /* ... */ },
+
+            // **修复：障碍物生成逻辑**
+            spawnEntities: function() {
+                STATE.distance += STATE.speed;
+                if (STATE.distance > 300) { 
+                    STATE.distance = 0;
+                    const rand = Math.random();
+                    if (rand < 0.4) {
+                        this.createBrickPattern();
+                    } else if (rand < 0.7) {
+                        this.createCoin();
+                    } else {
+                        this.createEnemy();
+                    }
+                }
+            },
+            
+            // **修改：创建组合砖块逻辑**
+            createBrickPattern: function() {
+                const spawnX = this.gameWidth + 50;
+                const heightLevel = Math.random() > 0.5 ? 100 : 180;
+                
+                // 随机决定组合中的砖块数量 (2或3块)
+                const brickCount = Math.random() > 0.5 ? 2 : 3;
+                
+                for (let i = 0; i < brickCount; i++) {
+                    // 随机决定是否有福袋，但要确保组合中至少有一个有福袋砖块
+                    const isLucky = (i === 0) ? Math.random() > 0.3 : Math.random() > 0.6;
+                    const type = isLucky ? 'lucky' : 'blank';
+                    // 修改：增加更多文字选项
+                    const text = isLucky ? ['吉','福','财','旺','运','顺'][Math.floor(Math.random()*6)] : '';
+                    
+                    const el = document.createElement('div');
+                    el.className = `game-block ${isLucky ? 'lucky-block' : 'blank-block'}`;
+                    el.innerText = text;
+                    el.style.bottom = (CONFIG.groundHeight + heightLevel) + 'px';
+                    el.style.left = (spawnX + i * 40) + 'px'; // 砖块水平排列
+                    
+                    document.getElementById('world-mover').appendChild(el);
+                    
+                    this.entities.push({ 
+                        type: type, 
+                        el: el, 
+                        x: spawnX + i * 40, 
+                        y: heightLevel, 
+                        width: 40, 
+                        height: 40, 
+                        hit: false,
+                        text: text, // 保存文字信息
+                        isLucky: isLucky // 保存是否为福袋砖块
+                    });
+                }
+            },
+
+            // **修复：创建金币逻辑**
+            createCoin: function() {
+                const spawnX = this.gameWidth + 50;
+                const height = Math.random() * 150 + 20; 
+                const el = document.createElement('div');
+                el.className = 'game-coin';
+                el.style.bottom = (CONFIG.groundHeight + height) + 'px';
+                el.style.left = spawnX + 'px';
+                document.getElementById('world-mover').appendChild(el);
+                this.entities.push({
+                    type: 'coin', el: el, x: spawnX, y: height, width: 25, height: 25, collected: false
+                });
+            },
+
+            // **修复：创建蘑菇兵逻辑**
+            createEnemy: function() {
+                const spawnX = this.gameWidth + 50;
+                const el = document.createElement('div');
+                el.className = 'game-enemy';
+                el.style.left = spawnX + 'px';
+                el.style.bottom = CONFIG.groundHeight + 'px';  
+                document.getElementById('world-mover').appendChild(el);
+                this.entities.push({ 
+                    type: 'enemy', 
+                    el: el, 
+                    x: spawnX, 
+                    y: 0, 
+                    width: 30, 
+                    height: 30 
+                });
+            },
+
+            checkCollision: function(player, ent) {
+                const pRect = {
+                    left: player.x + 10, right: player.x + player.width - 10,
+                    bottom: player.y, top: player.y + player.height
+                };
+                const eRect = {
+                    left: ent.visualX || ent.x, right: (ent.visualX || ent.x) + ent.width,
+                    bottom: ent.y, top: ent.y + ent.height
+                };
+                return (
+                    pRect.left < eRect.right && pRect.right > eRect.left &&
+                    pRect.bottom < eRect.top && pRect.top > eRect.bottom
+                );
+            },
+
+            // **修复：碰撞处理逻辑 (确保实体正确消失)**
+            handleCollision: function(ent) {
+                if (ent.type === 'coin') {
+                    ent.collected = true;
+                    ent.el.style.opacity = '0';
+                    ent.el.style.transform = 'translateY(-20px) scale(1.5)';
+                    setTimeout(() => { 
+                        // 确保从 DOM 中移除
+                        if (ent.el && ent.el.parentNode) ent.el.parentNode.removeChild(ent.el); 
+                    }, 300);
+                    this.addScore(1);
+                    return;
+                }
+
+                if (ent.type === 'enemy') {
+                    const pBottom = this.player.y;
+                    const eTop = ent.y + ent.height;
+                    const isStomping = this.player.vy > 0 && pBottom > eTop - 5; 
+                    if (isStomping) {
+                        ent.el.style.display = 'none';
+                        // 确保从 DOM 中移除 (蘑菇被踩后)
+                        setTimeout(() => { if (ent.el && ent.el.parentNode) ent.el.parentNode.removeChild(ent.el); }, 100);
+                        this.player.vy = -5;
+                        this.addScore(10);
+                        ent.collected = true; 
+                        return;
+                    } else {
+                        this.gameOver();
+                        return;
+                    }
+                }
+
+                // 修改：检查是否为砖块类型（包含lucky和blank）
+                if (ent.type === 'lucky' || ent.type === 'blank') {
+                    const isHittingHead = this.player.vy < 0 && 
+                                          (this.player.y + this.player.height) > ent.y && 
+                                          (this.player.y + this.player.height) < ent.y + ent.height;
+
+                    if (isHittingHead && !ent.hit) {
+                        ent.hit = true; 
+                        this.player.vy = 0; 
+                        ent.el.style.transform = 'translateY(-10px)';
+                        setTimeout(() => ent.el.style.transform = 'translateY(0)', 100);
+
+                        // 修改：检查是否为福袋砖块
+                        if (ent.isLucky && ent.text) {
+                            // 触发对应的图片显示
+                            this.spawnLuckyItem(ent, ent.text); // 传递文字信息
+                            this.addScore(5);
+                            ent.el.classList.remove('lucky-block');
+                            ent.el.classList.add('blank-block'); 
+                            ent.el.innerText = '';
+                        } else if (ent.type === 'blank' || !ent.isLucky) {
+                            this.triggerDizzy();
+                        }
+                    } else if (isHittingHead) {
+                         this.player.vy = 0;
+                    }
+                }
+             },
+
+            // **修改：根据文字显示对应的图片，并且不消失**
+            spawnLuckyItem: function(brickEnt, text) {
+                console.log("触发福袋砖块，文字：", text); // 调试信息
+                
+                // 文字对应的图片映射
+                const imageMap = {
+                    '吉': 'juzi.png',
+                    '福': 'hongbao.png',
+                    '财': 'yuanbao.png',
+                    '旺': 'dog.png',
+                    '运': '666.png',
+                    '顺': '66=.png'
+                };
+                
+                // 获取对应的图片文件名
+                const imageFile = imageMap[text] || 'hongbao.png'; // 默认使用红包图片
+                
+                // 创建图片元素
+                const item = document.createElement('div');
+                item.className = 'lucky-item';
+                item.innerHTML = `<img src="${imageFile}" alt="${text}" style="width:100%; height:100%; object-fit:contain;" onerror="this.style.display='none'; this.parentNode.innerHTML='${text}'; this.parentNode.style.color='#f8e71c'; this.parentNode.style.fontWeight='bold';">`;
+                
+                // 将图片添加到砖块上
+                brickEnt.el.appendChild(item);
+                
+                // 修改：不再设置定时器移除图片，图片会一直存在
+                console.log("已添加图片元素：", imageFile); // 调试信息
+            },
+            
+            triggerDizzy: function() {
+                if (this.player.isDizzy) return;
+                this.player.isDizzy = true;
+                STATE.speed = CONFIG.slowSpeed; 
+                document.getElementById('dizzy-icon').classList.add('active');
+                setTimeout(() => {
+                    this.player.isDizzy = false;
+                    STATE.speed = CONFIG.baseSpeed;
+                    document.getElementById('dizzy-icon').classList.remove('active');
+                }, 1500);
+            },
+
+            addScore: function(num) {
+                STATE.score += num;
+                document.getElementById('score-display').innerText = STATE.score;
+            },
+            
+            gameOver: function() {
+                STATE.isPlaying = false;
+                STATE.isGameOver = true;
+                cancelAnimationFrame(this.animationFrameId);
+                this.showPage('nickname-page'); 
+            },
+            
+            // 设置头像选项
+            setupAvatars: function() {
+                 const container = document.getElementById('avatar-selection-area');
+                 STATE.avatars.forEach((src, index) => {
+                     const div = document.createElement('div');
+                     div.className = 'avatar-option';
+                     div.innerHTML = `<img src="${src}" alt="头像${index + 1}" onerror="this.src='horse.png'">`;
+                     div.dataset.index = index;
+                     div.onclick = () => {
+                         document.querySelectorAll('.avatar-option').forEach(opt => opt.classList.remove('selected'));
+                         div.classList.add('selected');
+                         STATE.selectedAvatar = index;
+                     };
+                     container.appendChild(div);
+                     if (index === 0) div.classList.add('selected');
+                 });
+                 STATE.selectedAvatar = 0;
+             },
+
+            // 提交昵称并跳转到结算页
+            submitNickname: function() {
+                const nicknameInput = document.getElementById('nickname-input').value.trim();
+                STATE.nickname = nicknameInput || "匿名玩家"; 
+                this.showPage('result-page');
+            },
+            
+            // 更新结算页内容
+            updateResultPage: function() {
+                 const finalScore = STATE.score;
+                 document.getElementById('final-score-display').innerText = `${finalScore} 金币`;
+                 let title = STATE.titles[0].name;
+                 for (let i = STATE.titles.length - 1; i >= 0; i--) {
+                     if (finalScore >= STATE.titles[i].minScore) {
+                         title = STATE.titles[i].name;
+                         break;
+                     }
+                 }
+                 document.getElementById('title-name-display').innerText = title;
+             },
+
+            // 重新开始游戏 (从主菜单开始)
+            restart: function() {
+                this.showPage('main-menu-page');
+            }
+        };
+
+        // 启动加载
+        window.onload = function() {
+            game.init();
+        };
+
+        // 监听窗口大小变化以更新尺寸
+        window.onresize = function() {
+            game.updateDimensions();
+        };
+
+    </script>
+</body>
+</html>
